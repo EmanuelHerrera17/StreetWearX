@@ -164,11 +164,10 @@ document.getElementById("productoForm").addEventListener("submit", async (e) => 
     } else {
       // Si estamos ONLINE intentamos subir de inmediato
       if (navigator.onLine) {
-        const urls = [];
-        for (let file of inputImagenes.files) {
-          const url = await subirACloudinaryFile(file);
-          urls.push(url);
-        }
+        const urls = await Promise.all(
+  Array.from(inputImagenes.files).map(file => subirACloudinaryFile(file))
+);
+
         // Actualizar documento con URLs
         await updateDoc(doc(db, "productos", docRef.id), {
           imagen: urls[0] || "",
@@ -319,4 +318,5 @@ async function cargarProductos() {
 }
 
 cargarProductos();
+
 
