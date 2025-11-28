@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tienda en Línea - Cliente</title>
+
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#000000" />
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+  <style>
+    body { background-color: #000; color: white; }
+    .navbar { background-color: #000 !important; border-bottom: 3px solid #001f3f; }
+    .navbar-brand { font-size: 1.8rem; font-weight: bold; color: white !important; text-shadow: 0 0 8px #ff0000; }
+    .nav-logo { height: 45px; margin-right: 10px; }
+    .card { background-color: #111; border: 1px solid #001f3f; color: white; }
+    .product-img { border: 2px solid #001f3f; }
+    footer { text-align: center; color: #999; padding: 20px 0; margin-top: 40px; font-size: 14px; border-top: 2px solid #001f3f; background-color: #000; }
+
+    .filters { margin-top: 18px; margin-bottom: 18px; }
+    .filter-control { background: #111; color: #fff; border: 1px solid #222; }
+  </style>
+</head>
+
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar sticky-top">
+    <div class="container d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center">
+        <img src="LogoStreetWearX.jpg" class="nav-logo" alt="logo" />
+        <span class="navbar-brand">StreetWearX</span>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary" onclick="loginAdmin()">
+          <i class="bi bi-gear"></i> Admin
+        </button>
+
+        <button class="btn btn-primary position-relative" data-bs-toggle="offcanvas" data-bs-target="#cartOffcanvas">
+          <i class="bi bi-cart3"></i> Carrito
+          <span id="cart-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-3">
+    <div class="row filters">
+      <div class="col-md-4 mb-2">
+        <input id="searchInput" class="form-control filter-control" placeholder="Buscar por nombre o clave...">
+      </div>
+      <div class="col-md-3 mb-2">
+        <select id="categoriaFilter" class="form-control filter-control">
+          <option value="">Todas las categorías</option>
+        </select>
+      </div>
+      <div class="col-md-3 mb-2">
+        <select id="subcategoriaFilter" class="form-control filter-control">
+          <option value="">Todas las subcategorías</option>
+        </select>
+      </div>
+      <div class="col-md-2 mb-2 d-grid">
+        <button id="clearFilters" class="btn btn-outline-light">Limpiar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIDEO -->
+  <div class="video-container" style="width:100%; display:flex; justify-content:center; margin-top:5px;">
+    <video src="videoStreetWearX.mp4" autoplay loop muted controls playsinline style="width:35%; max-width:380px; border:4px solid #0044ff; border-radius:12px;"></video>
+  </div>
+
+  <!-- PRODUCTOS -->
+  <div class="container mt-4">
+    <div id="productos" class="row"></div>
+  </div>
+
+  <!-- CARRITO (sin cambios importantes) -->
+  <div class="offcanvas offcanvas-end bg-dark text-white" tabindex="-1" id="cartOffcanvas">
+    <div class="offcanvas-header">
+      <h5>Carrito de Compras</h5>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+
+    <div class="offcanvas-body">
+      <ul id="lista-carrito" class="list-group mb-3"></ul>
+
+      <p class="h5"><strong>Total: </strong> $<span id="total">0</span></p>
+
+      <div class="d-grid gap-2 mt-3">
+        <button id="limpiar-carrito" class="btn btn-danger">Vaciar Carrito</button>
+        <button id="pagar" class="btn btn-success">Pagar Ahora</button>
+        <a href="index.html" class="btn btn-outline-light">Volver al Inicio</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIN ADMIN -->
+  <script>
+    function loginAdmin() {
+      const nombre = prompt("Ingrese el nombre clave de administrador:");
+      if (nombre !== "streetwearx") { alert("Nombre clave incorrecto"); return; }
+
+      const pass = prompt("Ingrese la contraseña:");
+      if (pass !== "xwearstreet1") { alert("Contraseña incorrecta"); return; }
+
+      window.location.href = "admin.html";
+    }
+  </script>
+
+  <!-- FIREBASE Y LÓGICA DEL CLIENTE -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-app.js";
+    import {
+      getFirestore,
+      collection,
+      getDocs,
+      onSnapshot,
+      enableIndexedDbPersistence
+    } from "https://www.gstatic.com/firebasejs/10.5.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAFGCGCekNrohTD54KEGqUfw7PiN1I74LI",
+      authDomain: "streetwearx-f6013.firebaseapp.com",
+      projectId: "streetwearx-f6013",
+      storageBucket: "streetwearx-f6013.firebasestorage.app",
+      messagingSenderId: "86646846974",
+      appId: "1:86646846974:web:32aff3d36dd3a44cdcfcaf",
+      measurementId: "G-1PQM2B493N"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    enableIndexedDbPersistence(db).catch(err => {
+      console.warn("persistencia Firestore no disponible:", err);
+    });
+
+    const productosRef = collection(db, "productos");
+    let productosFinales = [];
+    let carrito = JSON.parse(localStorage.getItem("carrito")) || [];
+
+    const cont = document.getElementById("productos");
+    const listaCarritoEl = document.getElementById("lista-carrito");
+    const totalSpan = document.getElementById("total");
+    const badge = document.getElementById("cart-badge");
+
+    const searchInput = document.getElementById("searchInput");
+    const categoriaFilter = document.getElementById("categoriaFilter");
+    const subcategoriaFilter = document.getElementById("subcategoriaFilter");
+    const clearFiltersBtn = document.getElementById("clearFilters");
+
+    function applyFiltersAndRender() {
+      const term = (searchInput.value || "").toLowerCase().trim();
+      const cat = categoriaFilter.value;
+      const subcat = subcategoriaFilter.value;
+
+      const filtered = productosFinales.filter(p => {
+        if (cat && p.categoria !== cat) return false;
+        if (subcat && p.subcategoria !== subcat) return false;
+        if (term) {
+          return (p.nombre && p.nombre.toLowerCase().includes(term)) ||
+                 (p.clave && p.clave.toLowerCase().includes(term));
+        }
+        return true;
+      });
+
+      renderProducts(filtered);
+    }
+
+    function renderProducts(list) {
+      cont.innerHTML = "";
+      if (!list || list.length === 0) {
+        cont.innerHTML = `<div class="text-center p-4"><h4>No hay productos disponibles.</h4></div>`;
+        return;
+      }
+
+      list.forEach(prod => {
+        cont.innerHTML += `
+          <div class="col-12 col-md-4 mb-4">
+            <div class="card p-2 text-center">
+              <img src="${prod.imagenes?.[0] || prod.imagen || ''}" class="product-img img-fluid mb-2" style="height:200px; object-fit:cover;">
+              <h5>${prod.nombre}</h5>
+              <p class="h5">$${prod.precio}</p>
+              <button class="btn btn-primary" onclick="agregarAlCarrito('${prod.id}')">
+                Agregar al Carrito
+              </button>
+              ${prod.pendingImages ? '<p class="text-warning">Imágenes pendientes</p>' : ''}
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    // Realtime listener
+    onSnapshot(productosRef, (snapshot) => {
+      productosFinales = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      // fill filters
+      const categorias = new Set();
+      const subcategorias = new Set();
+      productosFinales.forEach(p => {
+        if (p.categoria) categorias.add(p.categoria);
+        if (p.subcategoria) subcategorias.add(p.subcategoria);
+      });
+
+      // repuebla selects
+      function fillSelect(sel, values) {
+        const current = sel.value || "";
+        sel.innerHTML = '<option value="">Todas</option>';
+        Array.from(values).sort().forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v;
+          opt.text = v;
+          sel.appendChild(opt);
+        });
+        if (current) sel.value = current;
+      }
+      fillSelect(categoriaFilter, categorias);
+      fillSelect(subcategoriaFilter, subcategorias);
+
+      applyFiltersAndRender();
+    }, (err) => {
+      console.error("onSnapshot error:", err);
+      // fallback
+      getDocs(productosRef).then(snap => {
+        productosFinales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        applyFiltersAndRender();
+      });
+    });
+
+    // filtros y búsqueda
+    searchInput.addEventListener('input', applyFiltersAndRender);
+    categoriaFilter.addEventListener('change', () => { subcategoriaFilter.value = ""; applyFiltersAndRender(); });
+    subcategoriaFilter.addEventListener('change', applyFiltersAndRender);
+    clearFiltersBtn.addEventListener('click', () => {
+      searchInput.value = "";
+      categoriaFilter.value = "";
+      subcategoriaFilter.value = "";
+      applyFiltersAndRender();
+    });
+
+    /* =========================
+       CARRITO
+       ========================= */
+    function actualizarCarrito() {
+      listaCarritoEl.innerHTML = "";
+      let total = 0;
+      let cantidad = 0;
+
+      carrito.forEach(item => {
+        total += item.precio * item.cantidad;
+        cantidad += item.cantidad;
+
+        const li = document.createElement("li");
+        li.className = "list-group-item bg-dark text-white d-flex justify-content-between align-items-center";
+        li.innerHTML = `
+          <strong>${item.nombre}</strong>
+          <span>
+            $${item.precio} x ${item.cantidad}
+            <button class="btn btn-sm btn-danger ms-2">X</button>
+          </span>
+        `;
+        li.querySelector("button").addEventListener("click", () => {
+          eliminarItem(item.id);
+        });
+
+        listaCarritoEl.appendChild(li);
+      });
+
+      totalSpan.textContent = total.toFixed(2);
+      badge.textContent = cantidad;
+      badge.classList.toggle("d-none", cantidad === 0);
+
+      localStorage.setItem("carrito", JSON.stringify(carrito));
+    }
+
+    window.agregarAlCarrito = function(id) {
+      const prod = productosFinales.find(p => p.id == id);
+      if (!prod) { alert("Producto no encontrado."); return; }
+      const existe = carrito.find(item => item.id == id);
+      if (existe) existe.cantidad++;
+      else carrito.push({ id: prod.id, nombre: prod.nombre, precio: parseFloat(prod.precio) || 0, cantidad: 1 });
+      actualizarCarrito();
+    };
+
+    window.eliminarItem = function(id) {
+      carrito = carrito.filter(i => i.id != id);
+      actualizarCarrito();
+    };
+
+    document.getElementById("limpiar-carrito").addEventListener("click", () => {
+      carrito = [];
+      actualizarCarrito();
+    });
+
+    document.getElementById("pagar").addEventListener("click", () => {
+      if (carrito.length === 0) { alert("Tu carrito está vacío."); return; }
+      alert("Gracias por tu compra 🛍️");
+      carrito = [];
+      actualizarCarrito();
+    });
+
+    actualizarCarrito();
+
+    /* =========================
+       SERVICE WORKER
+       ========================= */
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => console.log('SW registrado:', reg.scope))
+        .catch(err => console.warn('Error registrando SW:', err));
+
+      navigator.serviceWorker.addEventListener('message', (ev) => {
+        if (ev.data?.type === 'REFRESH_PRODUCTS') {
+          // for future use: refresh UI
+          getDocs(productosRef).then(snap => {
+            productosFinales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            applyFiltersAndRender();
+          });
+        }
+      });
+    }
+
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <footer>
+    © 2025 StreetWearX — Todos los derechos reservados.
+  </footer>
+
+</body>
+</html>

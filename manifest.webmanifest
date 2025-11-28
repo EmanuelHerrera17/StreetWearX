@@ -1,0 +1,23 @@
+{
+  "name": "Tienda Online PWA - StreetWearX",
+  "short_name": "StreetWearX",
+  "description": "Sistema de tienda online progresiva StreetWearX",
+  "start_url": "/StreetWearX/index.html",
+  "scope": "/StreetWearX/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/StreetWearX/Iconos/LogoStreetWearX.jpg",
+      "sizes": "192x192",
+      "type": "image/jpg"
+    },
+    {
+      "src": "/StreetWearX/Iconos/LogoStreetWearX.jpg",
+      "sizes": "512x512",
+      "type": "image/jpg"
+    }
+  ]
+}
