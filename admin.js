@@ -1,179 +1,111 @@
-// admin.js (FINAL CORREGIDO)
+// =====================
+//  CONFIGURACIÓN FIREBASE
+// =====================
 
-const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dslk9djpt/image/upload";
-const UPLOAD_PRESET = "streetwearx_preset";
+const db = firebase.firestore();
 
-let products = [];
 
-// Cargar inicial
-window.onload = () => loadProducts();
+// =====================
+//  ELEMENTOS DEL DOM
+// =====================
 
-// ----------------------------------------------------------
-// PREVIEW DE IMÁGENES
-// ----------------------------------------------------------
-document.getElementById("imagenesProducto").addEventListener("change", function () {
-  const preview = document.getElementById("previewImagenes");
-  preview.innerHTML = "";
+const productContainer = document.getElementById("product-container");
+const categoryFilter = document.getElementById("category-filter");
+const subcategoryFilter = document.getElementById("subcategory-filter");
 
-  [...this.files].forEach((file) => {
-    const img = document.createElement("img");
-    img.src = URL.createObjectURL(file);
-    preview.appendChild(img);
-  });
-});
 
-// ----------------------------------------------------------
-// FORMULARIO NUEVO PRODUCTO
-// ----------------------------------------------------------
-document.getElementById("productoForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
+// =====================
+//  CARGAR PRODUCTOS
+// =====================
 
-  const btn = document.getElementById("submitBtn");
-  const spinner = document.getElementById("submitSpinner");
+async function loadProducts(category = "", subcategory = "") {
+    productContainer.innerHTML = "<p>Cargando productos...</p>";
 
-  btn.disabled = true;
-  spinner.classList.remove("d-none");
+    let query = db.collection("products");
 
-  const nombre = nombreProducto.value;
-  const clave = claveProducto.value;
-  const categoria = categoria.value;
-  const subcategoria = subcategoria.value;
-  const precio = precioProducto.value;
-  const stockVal = stock.value;
-  const descripcionTxt = descripcion.value;
-
-  const imagenes = [...document.getElementById("imagenesProducto").files];
-
-  const producto = {
-    id: Date.now(),
-    nombre,
-    clave,
-    categoria,
-    subcategoria,
-    precio,
-    stock: stockVal,
-    descripcion: descripcionTxt,
-    imagenesBlobs: imagenes,
-  };
-
-  try {
-    // Intentar subida normal
-    const urls = await uploadImagesCloudinary(imagenes);
-
-    products.push({
-      ...producto,
-      imagenes: urls,
-    });
-
-    saveProductsLocal();
-    renderProducts();
-    bootstrap.Modal.getInstance(document.getElementById("productoModal")).hide();
-  } catch (err) {
-    // Guardar en cola offline
-    await enqueueOffline(producto);
-    alert("Sin internet. Guardado en cola offline.");
-
-    // Notificar al service worker
-    if (navigator.serviceWorker.controller) {
-      navigator.serviceWorker.controller.postMessage({ type: "PROCESS_QUEUE" });
+    // Filtro por categoría
+    if (category !== "") {
+        query = query.where("category", "==", category);
     }
-  }
 
-  btn.disabled = false;
-  spinner.classList.add("d-none");
-  document.getElementById("productoForm").reset();
-  document.getElementById("previewImagenes").innerHTML = "";
+    // Filtro por subcategoría
+    if (subcategory !== "") {
+        query = query.where("subcategory", "==", subcategory);
+    }
+
+    const snapshot = await query.orderBy("createdAt", "desc").get();
+
+    productContainer.innerHTML = "";
+
+    if (snapshot.empty) {
+        productContainer.innerHTML = "<p>No hay productos que coincidan con los filtros.</p>";
+        return;
+    }
+
+    snapshot.forEach(doc => {
+        const p = doc.data();
+
+        const item = document.createElement("div");
+        item.classList.add("product-card");
+
+        item.innerHTML = `
+            <img src="${p.image}" alt="${p.name}">
+            <h3>${p.name}</h3>
+            <p class="price">$${p.price}</p>
+            <p class="cat">Categoría: ${p.category}</p>
+            <p class="subcat">Subcategoría: ${p.subcategory}</p>
+        `;
+
+        productContainer.appendChild(item);
+    });
+}
+
+
+
+// =====================
+//  LLENAR SELECT DE SUBCATEGORÍAS AUTOMÁTICAMENTE
+// =====================
+
+function updateSubcategories() {
+    const category = categoryFilter.value;
+
+    const subcats = {
+        "Hombre": ["Playeras", "Sudaderas", "Pantalones", "Accesorios"],
+        "Mujer": ["Playeras", "Sudaderas", "Pantalones", "Accesorios"],
+        "Niño": ["Playeras", "Sudaderas", "Pantalones", "Accesorios"],
+        "Accesorios": ["Gorras", "Mochilas", "Cadenas", "Otros"]
+    };
+
+    subcategoryFilter.innerHTML = `<option value="">Todas</option>`;
+
+    if (subcats[category]) {
+        subcats[category].forEach(s => {
+            const op = document.createElement("option");
+            op.value = s;
+            op.textContent = s;
+            subcategoryFilter.appendChild(op);
+        });
+    }
+}
+
+
+// =====================
+//  EVENTOS DE LOS FILTROS
+// =====================
+
+categoryFilter.addEventListener("change", () => {
+    updateSubcategories();
+    loadProducts(categoryFilter.value, "");
 });
 
-// ----------------------------------------------------------
-// SUBIR IMÁGENES A CLOUDINARY
-// ----------------------------------------------------------
-async function uploadImagesCloudinary(files) {
-  const urls = [];
+subcategoryFilter.addEventListener("change", () => {
+    loadProducts(categoryFilter.value, subcategoryFilter.value);
+});
 
-  for (const file of files) {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", UPLOAD_PRESET);
 
-    const res = await fetch(CLOUDINARY_URL, {
-      method: "POST",
-      body: formData,
-    });
+// =====================
+//  INICIAR
+// =====================
 
-    if (!res.ok) throw new Error("Error al subir imagen");
-
-    const data = await res.json();
-    urls.push(data.secure_url);
-  }
-
-  return urls;
-}
-
-// ----------------------------------------------------------
-// COLA OFFLINE (PARA SERVICE WORKER)
-// ----------------------------------------------------------
-async function enqueueOffline(producto) {
-  return new Promise((resolve) => {
-    const req = indexedDB.open("streetwearx-db", 1);
-    req.onupgradeneeded = () => req.result.createObjectStore("uploadQueue", { keyPath: "id" });
-    req.onsuccess = () => {
-      const db = req.result;
-      const tx = db.transaction("uploadQueue", "readwrite");
-      tx.objectStore("uploadQueue").add(producto);
-      tx.oncomplete = resolve;
-    };
-  });
-}
-
-// ----------------------------------------------------------
-// LOCAL STORAGE (PRODUCTOS MOSTRADOS)
-// ----------------------------------------------------------
-function saveProductsLocal() {
-  localStorage.setItem("products", JSON.stringify(products));
-}
-
-function loadProducts() {
-  const data = localStorage.getItem("products");
-  if (data) products = JSON.parse(data);
-  renderProducts();
-}
-
-// ----------------------------------------------------------
-// MOSTRAR PRODUCTOS
-// ----------------------------------------------------------
-function renderProducts() {
-  const container = document.getElementById("productsContainer");
-  container.innerHTML = "";
-
-  products.forEach((p) => {
-    const col = document.createElement("div");
-    col.className = "col-md-4 mb-3";
-
-    col.innerHTML = `
-      <div class="card p-2">
-        <img src="${p.imagenes?.[0] || "LogoStreetWearX.jpg"}" class="card-img-top thumb">
-
-        <div class="card-body">
-          <h5 class="card-title">${p.nombre}</h5>
-          <p class="card-text">${p.descripcion}</p>
-
-          <button class="btn btn-danger w-100" onclick="deleteProduct(${p.id})">
-            <i class="bi bi-trash"></i> Eliminar
-          </button>
-        </div>
-      </div>
-    `;
-
-    container.appendChild(col);
-  });
-}
-
-// ----------------------------------------------------------
-// BORRAR PRODUCTO
-// ----------------------------------------------------------
-function deleteProduct(id) {
-  products = products.filter((p) => p.id !== id);
-  saveProductsLocal();
-  renderProducts();
-}
+updateSubcategories();
+loadProducts();
