@@ -1,10 +1,9 @@
-<!-- admin.html -->
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="manifest" href="./manifest.webmanifest">
   <meta name="theme-color" content="#ffffff">
   <title>Admin - Tienda en Línea</title>
 
@@ -27,7 +26,6 @@
     .modal-content { background: #111; color: white; border: 2px solid #0044ff; }
     footer { margin-top: 40px; padding: 20px; text-align: center; color: white; border-top: 2px solid #002266; font-size: 0.9rem; }
 
-    /* ESTILO NUEVO PARA PREVIEW DE IMÁGENES */
     #previewImagenes img {
       width: 90px;
       height: 90px;
@@ -38,7 +36,6 @@
       border: 1px solid #0044ff;
     }
 
-    /* BOTÓN FLOTANTE PARA PROCESAR COLA (DISCRETO) */
     #btnProcesarCola {
       position: fixed;
       right: 18px;
@@ -170,12 +167,14 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script type="module" src="admin.js"></script>
+
+<!-- Usar admin.js (asegúrate de pegar la versión corregida que te pasé en la Parte 1) -->
+<script type="module" src="./admin.js"></script>
 
 <!-- SERVICE WORKER (AÑADIDO + MENSAJES / SYNC) -->
 <script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
+    navigator.serviceWorker.register('./sw.js')
       .then(async (reg) => {
         console.log("Service Worker registrado en Admin:", reg.scope);
 
@@ -193,7 +192,6 @@
         if (navigator.serviceWorker.controller) {
           navigator.serviceWorker.controller.postMessage({ type: 'PROCESS_QUEUE' });
         } else {
-          // Si aún no hay controller, esperar a que cambie y luego pedir
           navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (navigator.serviceWorker.controller) {
               navigator.serviceWorker.controller.postMessage({ type: 'PROCESS_QUEUE' });
@@ -204,13 +202,11 @@
       .catch(err => console.warn("SW error:", err));
   }
 
-  // Botón flotante para forzar procesamiento de la cola
   function sendProcessQueueMessage() {
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: 'PROCESS_QUEUE' });
       alert('Solicitud enviada: se intentará procesar la cola de imágenes pendientes.');
     } else if (navigator.serviceWorker) {
-      // Si no hay controller aún, intentar enviar al registration active
       navigator.serviceWorker.getRegistration().then(reg => {
         if (reg && reg.active) {
           reg.active.postMessage({ type: 'PROCESS_QUEUE' });
@@ -225,7 +221,7 @@
   }
 </script>
 
-<!-- BOTÓN FLOTANTE (opcional, puedes eliminarlo si no lo quieres visible) -->
+<!-- BOTÓN FLOTANTE (opcional) -->
 <button id="btnProcesarCola" onclick="sendProcessQueueMessage()" title="Procesar imágenes pendientes">
   ⚡ Procesar Cola
 </button>
