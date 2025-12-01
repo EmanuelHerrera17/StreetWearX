@@ -1,5 +1,5 @@
 /*****************************************
- *   ADMIN PANEL – StreetWearX (CORREGIDO)
+ *   ADMIN PANEL – StreetWearX (CORREGIDO - ACTUALIZADO)
  *   Cloudinary + Firestore + Offline Queue
  *   + Compresión de imágenes
  *   + Borrado de productos
@@ -23,12 +23,13 @@ import {
 
 /* ---------------------------
    FIREBASE CONFIG
+   NOTE: storageBucket corrected -> appspot.com
 --------------------------- */
 const firebaseConfig = {
   apiKey: "AIzaSyAFGCGCekNrohTD54KEGqUfw7PiN1I74LI",
   authDomain: "streetwearx-f6013.firebaseapp.com",
   projectId: "streetwearx-f6013",
-  storageBucket: "streetwearx-f6013.firebasestorage.app",
+  storageBucket: "streetwearx-f6013.appspot.com", // <-- CORREGIDO
   messagingSenderId: "86646846974",
   appId: "1:86646846974:web:32aff3d36dd3a44cdcfcaf",
   measurementId: "G-1PQM2B493N"
@@ -42,7 +43,7 @@ const productosRef = collection(db, "productos");
    HABILITAR OFFLINE
 --------------------------- */
 enableIndexedDbPersistence(db).catch((err) => {
-  console.warn("IndexedDB no disponible:", err);
+  console.warn("IndexedDB no disponible o ya habilitado en otra pestaña:", err);
 });
 
 /* -------------------------------------------------------
@@ -82,7 +83,6 @@ async function comprimirImagen(file, maxWidth = 1080, quality = 0.75) {
 
       canvas.toBlob((blob) => {
         if (!blob) return reject(new Error("No blob creado al comprimir"));
-        // conservar nombre base y forzar extension jpg
         const baseName = file.name ? file.name.replace(/\.[^/.]+$/, "") : Date.now().toString();
         const newName = baseName + ".jpg";
         resolve(new File([blob], newName, { type: "image/jpeg" }));
@@ -95,6 +95,7 @@ async function comprimirImagen(file, maxWidth = 1080, quality = 0.75) {
 
 /* -------------------------------------------------------
    SUBIR A CLOUDINARY
+   - Usa preset unsigned configurado en tu cuenta
 -------------------------------------------------------- */
 async function subirACloudinary(file) {
   const formData = new FormData();
@@ -111,7 +112,10 @@ async function subirACloudinary(file) {
     throw new Error("Cloudinary upload failed: " + res.status + " " + text);
   }
   const data = await res.json();
-  return data.secure_url;
+  return {
+    url: data.secure_url,
+    public_id: data.public_id // útil si quieres borrar / gestionar desde backend
+  };
 }
 
 /* -------------------------------------------------------
@@ -172,17 +176,21 @@ async function processQueue() {
     if (item.type !== "uploadImages") continue;
     try {
       const urls = [];
+      const public_ids = [];
+
       for (const f of item.files) {
         // f: { name, type, buffer: ArrayBuffer }
         const fileObj = new File([f.buffer], f.name, { type: f.type });
         const comprimida = await comprimirImagen(fileObj);
-        const url = await subirACloudinary(comprimida);
-        urls.push(url);
+        const res = await subirACloudinary(comprimida);
+        urls.push(res.url);
+        if (res.public_id) public_ids.push(res.public_id);
       }
 
       await updateDoc(doc(db, "productos", item.docId), {
         imagen: urls[0] || "",
         imagenes: urls,
+        public_ids: public_ids,
         pendingImages: false
       });
 
@@ -194,6 +202,8 @@ async function processQueue() {
     }
   }
 }
+
+/* -- intentar procesar cola al detectar online (listener global) -- */
 window.addEventListener("online", () => {
   processQueue().catch(e => console.error(e));
 });
@@ -237,6 +247,7 @@ if (productoForm) {
         descripcion: descripcionEl.value.trim(),
         imagen: "",
         imagenes: [],
+        public_ids: [],
         pendingImages: true,
         fecha: new Date().toISOString()
       };
@@ -250,16 +261,20 @@ if (productoForm) {
       } else {
         // ONLINE -> subir ahora
         if (navigator.onLine) {
-          const urls = await Promise.all(
+          const results = await Promise.all(
             Array.from(inputImagenes.files).map(async (file) => {
               const comp = await comprimirImagen(file);
               return subirACloudinary(comp);
             })
           );
 
+          const urls = results.map(r => r.url || r);
+          const public_ids = results.map(r => r.public_id || null).filter(Boolean);
+
           await updateDoc(doc(db, "productos", ref.id), {
             imagen: urls[0] || "",
             imagenes: urls,
+            public_ids: public_ids,
             pendingImages: false
           });
 
@@ -281,10 +296,14 @@ if (productoForm) {
             createdAt: Date.now()
           });
 
-          // pedir al SW/registrations que intente sync (si disponible)
-          if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+          // pedir al SW que intente sync (si disponible)
+          if ('serviceWorker' in navigator && navigator.serviceWorker.ready) {
             navigator.serviceWorker.ready.then(reg => {
               if (reg.sync) reg.sync.register('sync-products').catch(()=>{});
+              // enviar mensaje al sw por si no soporta sync
+              if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: "PROCESS_QUEUE" });
+              }
             });
           }
 
@@ -297,9 +316,10 @@ if (productoForm) {
       preview.innerHTML = "";
       const bsModal = bootstrap.Modal.getInstance(productoModal);
       if (bsModal) bsModal.hide();
+
     } catch (err) {
       console.error("Error guardando producto:", err);
-      alert("Error al guardar producto.");
+      alert("Error al guardar producto: " + (err.message || err));
     } finally {
       submitSpinner.classList.add("d-none");
       submitBtn.disabled = false;
@@ -341,6 +361,9 @@ function renderProductsList(snapshot) {
       const id = btn.getAttribute("data-id");
       if (!confirm("¿Confirmas eliminar este producto? Esta acción es irreversible.")) return;
       try {
+        // Opcional: si quieres borrar también imágenes en Cloudinary, necesitarás un endpoint seguro en servidor
+        // que reciba los public_ids (almacenados en public_ids) y haga la llamada al API de Cloudinary.
+        // Aquí solo eliminamos el documento de Firestore.
         await deleteDoc(doc(db, "productos", id));
         alert("Producto eliminado.");
       } catch (err) {
@@ -366,6 +389,29 @@ cargarProductos();
 -------------------------------------------------------- */
 navigator.serviceWorker?.addEventListener("message", (ev) => {
   if (ev.data?.type === "PROCESS_QUEUE") {
-    processQueue().catch(e => console.error(e));
+    // El SW pide que procesemos cola — hacerlo si estamos online
+    if (navigator.onLine) {
+      processQueue().catch(e => console.error(e));
+    } else {
+      console.log("SW solicitó procesar cola pero estamos offline.");
+    }
   }
 });
+
+/* -------------------------------------------------------
+   Intentar procesar la cola al inicio si estamos online
+-------------------------------------------------------- */
+(async function tryProcessOnStart() {
+  if (navigator.onLine) {
+    try {
+      await processQueue();
+    } catch (e) {
+      console.error("Error intentando procesar la cola al iniciar:", e);
+    }
+  }
+})();
+
+/* -------------------------------------------------------
+   Para debug: botón flotante ya en admin.html invoca:
+   navigator.serviceWorker.controller.postMessage({ type: 'PROCESS_QUEUE' })
+-------------------------------------------------------- */
