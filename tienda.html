@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tienda en Línea - Cliente</title>
 
-  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="manifest" href="./manifest.webmanifest" />
   <meta name="theme-color" content="#000000" />
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -79,7 +79,7 @@
     <div id="productos" class="row"></div>
   </div>
 
-  <!-- CARRITO (sin cambios importantes) -->
+  <!-- CARRITO -->
   <div class="offcanvas offcanvas-end bg-dark text-white" tabindex="-1" id="cartOffcanvas">
     <div class="offcanvas-header">
       <h5>Carrito de Compras</h5>
@@ -127,7 +127,7 @@
       apiKey: "AIzaSyAFGCGCekNrohTD54KEGqUfw7PiN1I74LI",
       authDomain: "streetwearx-f6013.firebaseapp.com",
       projectId: "streetwearx-f6013",
-      storageBucket: "streetwearx-f6013.firebasestorage.app",
+      storageBucket: "streetwearx-f6013.appspot.com",
       messagingSenderId: "86646846974",
       appId: "1:86646846974:web:32aff3d36dd3a44cdcfcaf",
       measurementId: "G-1PQM2B493N"
@@ -207,10 +207,9 @@
         if (p.subcategoria) subcategorias.add(p.subcategoria);
       });
 
-      // repuebla selects
-      function fillSelect(sel, values) {
+      function fillSelect(sel, values, defaultText) {
         const current = sel.value || "";
-        sel.innerHTML = '<option value="">Todas</option>';
+        sel.innerHTML = `<option value="">${defaultText}</option>`;
         Array.from(values).sort().forEach(v => {
           const opt = document.createElement('option');
           opt.value = v;
@@ -219,13 +218,12 @@
         });
         if (current) sel.value = current;
       }
-      fillSelect(categoriaFilter, categorias);
-      fillSelect(subcategoriaFilter, subcategorias);
+      fillSelect(categoriaFilter, categorias, 'Todas las categorías');
+      fillSelect(subcategoriaFilter, subcategorias, 'Todas las subcategorías');
 
       applyFiltersAndRender();
     }, (err) => {
       console.error("onSnapshot error:", err);
-      // fallback
       getDocs(productosRef).then(snap => {
         productosFinales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         applyFiltersAndRender();
@@ -310,13 +308,12 @@
        SERVICE WORKER
        ========================= */
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
+      navigator.serviceWorker.register('./sw.js')
         .then(reg => console.log('SW registrado:', reg.scope))
         .catch(err => console.warn('Error registrando SW:', err));
 
       navigator.serviceWorker.addEventListener('message', (ev) => {
         if (ev.data?.type === 'REFRESH_PRODUCTS') {
-          // for future use: refresh UI
           getDocs(productosRef).then(snap => {
             productosFinales = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             applyFiltersAndRender();
