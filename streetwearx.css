@@ -1,0 +1,190 @@
+/* ==========================================================
+   StreetWearX - CSS Oficial Personalizado
+   Diseño: Negro, Azul Eléctrico y Rojo — Estilo urbano/tech
+   Compatibilidad: Todos los HTML (index, tienda, admin)
+=========================================================== */
+
+/* ----- TIPOGRAFÍA GENERAL ----- */
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: #000;
+  color: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+/* ----- LOGO ----- */
+.logo {
+  width: 180px;
+  display: block;
+  margin: 20px auto;
+  border-radius: 12px;
+  filter: drop-shadow(4px 4px 10px #001f3f);
+}
+
+/* ----- TITULOS ----- */
+.title, h1, h2, h3 {
+  text-align: center;
+  color: white;
+  text-shadow: 3px 3px 8px #001f3f;
+  font-weight: bold;
+}
+
+/* ----- BOTONES GENERALES ----- */
+.btn-custom {
+  padding: 15px 25px;
+  font-size: 20px;
+  font-weight: bold;
+  border: 2px solid #001f3f;
+  border-radius: 12px;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  background: #ffffff;
+  color: rgb(25, 0, 255);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  transition: 0.3s ease;
+}
+
+.btn-custom:hover {
+  background: black;
+  color: white;
+}
+
+/* Ícono rojo */
+.btn-logo {
+  font-size: 28px;
+  color: #ff0000;
+}
+
+/* ----- MENÚ PRINCIPAL ----- */
+.menu {
+  max-width: 400px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  padding: 20px;
+}
+
+/* ----- FORMULARIOS ----- */
+.form-box {
+  background: #111;
+  border: 2px solid #ff0000;
+  padding: 20px;
+  margin-top: 30px;
+  border-radius: 12px;
+  display: none;
+}
+
+input, select {
+  background: #fff !important;
+  color: #000 !important;
+  border: 1px solid #001f3f !important;
+}
+
+/* ----- TABLAS (Admin) ----- */
+.table-dark-custom {
+  width: 100%;
+  background: #111;
+  color: white;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+
+.table-dark-custom th {
+  background: #001f3f;
+  padding: 12px;
+  border: 1px solid #333;
+}
+
+.table-dark-custom td {
+  padding: 10px;
+  border: 1px solid #333;
+}
+
+.table-dark-custom tr:hover {
+  background: #222;
+}
+
+/* ----- TARJETAS DE PRODUCTOS (Tienda) ----- */
+.product-card {
+  background: #111;
+  border: 2px solid #001f3f;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 20px;
+  color: white;
+  box-shadow: 0px 0px 10px rgba(0, 0, 50, 0.7);
+}
+
+.product-card img {
+  width: 100%;
+  border-radius: 10px;
+  border: 2px solid #001f3f;
+}
+
+.product-title {
+  font-size: 22px;
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+.product-price {
+  font-size: 20px;
+  color: #00aaff;
+  font-weight: bold;
+}
+
+/* Botón agregar */
+.btn-add {
+  padding: 12px;
+  background: #001f3f;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  width: 100%;
+  margin-top: 10px;
+  font-weight: bold;
+  transition: 0.3s ease;
+}
+
+.btn-add:hover {
+  background: #003b8b;
+}
+
+/* ----- CONTENEDORES ----- */
+.container-box {
+  max-width: 900px;
+  margin: auto;
+  padding: 20px;
+}
+
+/* ----- FOOTER COPYRIGHT ----- */
+.footer {
+  margin-top: 50px;
+  text-align: center;
+  background: #001f3f;
+  padding: 15px;
+  color: white;
+  border-top: 2px solid #ff0000;
+  border-radius: 8px;
+  opacity: 0.85;
+}
+
+/* ----- RESPONSIVE ----- */
+@media (max-width: 600px) {
+  .btn-custom {
+    font-size: 18px;
+    padding: 12px;
+  }
+  .product-title {
+    font-size: 20px;
+  }
+  .product-price {
+    font-size: 18px;
+  }
+}
