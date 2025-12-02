@@ -69,7 +69,7 @@ const productsContainer = document.getElementById("productsContainer");
 --------------------------- */
 const CLOUD_NAME = "dexxdi5fs"; // ⚠️ VERIFICA ESTE VALOR EN DASHBOARD
 const UPLOAD_PRESET = "streetwearx_unsigned"; // ⚠️ CREA ESTE PRESET SI NO EXISTE
-const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${dexxdi5fs}/image/upload`;
 
 console.log("🔧 Cloudinary Config:", { CLOUD_NAME, UPLOAD_PRESET, CLOUDINARY_URL });
 
@@ -571,4 +571,5 @@ function escapeHtml(unsafe) {
    - public_ids are stored in each product doc so server-side deletion is possible.
    - I intentionally avoid embedding Cloudinary API_SECRET in the client.
 ===================================================== */
+
 
