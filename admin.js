@@ -70,7 +70,7 @@ const productsContainer = document.getElementById("productsContainer");
 --------------------------- */
 // ...existing code...
 const CLOUD_NAME = "dv5pdjhso";
-const UPLOAD_PRESET = "pwa_unsigned";
+const UPLOAD_PRESET = "streetwearx_unsigned";
 const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
 
 // Validación sencilla y log claro
@@ -611,4 +611,5 @@ function escapeHtml(unsafe) {
    - I intentionally avoid embedding Cloudinary API_SECRET in the client.
 ===================================================== */
 // ...existing code...
+
 
