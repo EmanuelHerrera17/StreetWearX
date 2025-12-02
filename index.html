@@ -21,7 +21,7 @@
       --btn-text: rgb(25, 0, 255);
     }
 
-    html,body { height:100%; }
+    html, body { height:100%; }
     body {
       font-family: Arial, sans-serif;
       background: var(--page-bg);
@@ -30,8 +30,8 @@
       margin: 0 auto;
       padding: 20px;
       text-align: center;
-      -webkit-font-smoothing:antialiased;
-      -moz-osx-font-smoothing:grayscale;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
     .logo {
@@ -77,7 +77,8 @@
       transition: 180ms ease;
     }
 
-    .btn-custom:hover, .btn-custom:focus {
+    .btn-custom:hover,
+    .btn-custom:focus {
       background: #000;
       color: white;
       outline: none;
@@ -168,7 +169,6 @@
   <div id="formAdmin" class="form-box" aria-hidden="true">
     <h4>Acceso Administrador</h4>
 
-    <!-- etiquetas para accesibilidad (visualmente ocultas) -->
     <label for="adminUser" class="sr-only">Usuario administrador</label>
     <input id="adminUser" type="text" class="form-control mb-2" placeholder="Usuario" autocomplete="username">
 
@@ -179,11 +179,11 @@
       <button id="entrarAdmin" class="btn-custom" type="button">Entrar</button>
     </div>
 
-    <p class="mt-3 text-muted small">Nota: este acceso es local (solo para demostración). No uses credenciales en claro en producción.</p>
+    <p class="mt-3 text-muted small">Nota: acceso local para demostración.</p>
   </div>
 
 <script>
-  // Referencias a elementos (evita variables globales no definidas)
+  // Referencias
   const btnCliente = document.getElementById('btnCliente');
   const btnAdmin = document.getElementById('btnAdmin');
   const formCliente = document.getElementById('formCliente');
@@ -193,75 +193,71 @@
   const adminUser = document.getElementById('adminUser');
   const adminPass = document.getElementById('adminPass');
 
-  // Mostrar/Ocultar funciones (manejo accesible)
+  // Mostrar formulario Cliente
   function showClientForm() {
-    if (formCliente) {
-      formCliente.style.display = 'block';
-      formCliente.setAttribute('aria-hidden','false');
-    }
-    if (formAdmin) {
-      formAdmin.style.display = 'none';
-      formAdmin.setAttribute('aria-hidden','true');
-    }
-    if (entrarCliente) entrarCliente.focus();
+    formCliente.style.display = 'block';
+    formCliente.setAttribute('aria-hidden','false');
+    formAdmin.style.display = 'none';
+    formAdmin.setAttribute('aria-hidden','true');
+    entrarCliente.focus();
   }
 
+  // Mostrar formulario Admin
   function showAdminForm() {
-    if (formAdmin) {
-      formAdmin.style.display = 'block';
-      formAdmin.setAttribute('aria-hidden','false');
-    }
-    if (formCliente) {
-      formCliente.style.display = 'none';
-      formCliente.setAttribute('aria-hidden','true');
-    }
-    if (adminUser) adminUser.focus();
+    formAdmin.style.display = 'block';
+    formAdmin.setAttribute('aria-hidden','false');
+    formCliente.style.display = 'none';
+    formCliente.setAttribute('aria-hidden','true');
+    adminUser.focus();
   }
 
-  btnCliente?.addEventListener('click', showClientForm);
-  btnAdmin?.addEventListener('click', showAdminForm);
+  btnCliente.addEventListener('click', showClientForm);
+  btnAdmin.addEventListener('click', showAdminForm);
 
-  // Cliente -> tienda
-  entrarCliente?.addEventListener('click', () => {
+  // Redirección Cliente
+  entrarCliente.addEventListener('click', () => {
     window.location.href = 'tienda.html';
   });
 
-  // Admin -> validación simple (local)
-  // NOTA: mantener credenciales en frontend es inseguro. Usar auth real en producción.
+  // Credenciales locales
   const ADMIN_USER = 'streetwearx';
   const ADMIN_PASS = 'xwearstreet1';
 
   function tryLoginAdmin() {
-    const user = (adminUser?.value || '').trim();
-    const pass = (adminPass?.value || '').trim();
+    const user = adminUser.value.trim();
+    const pass = adminPass.value.trim();
 
     if (user === ADMIN_USER && pass === ADMIN_PASS) {
-      // autenticación simple OK
       window.location.href = 'admin.html';
     } else {
-      // no dar pistas excesivas
       alert('Datos incorrectos.');
-      if (adminPass) { adminPass.value = ''; adminPass.focus(); }
+      adminPass.value = '';
+      adminPass.focus();
     }
   }
 
-  entrarAdmin?.addEventListener('click', tryLoginAdmin);
+  entrarAdmin.addEventListener('click', tryLoginAdmin);
 
-  // Soporte para pulsar Enter en los inputs del formAdmin
-  adminUser?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); adminPass?.focus(); }
-  });
-  adminPass?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); tryLoginAdmin(); }
+  // Enter key
+  adminUser.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { 
+      e.preventDefault(); 
+      adminPass.focus(); 
+    }
   });
 
-  // Si quieres mostrar el formulario según query param, por ejemplo ?admin=1
+  adminPass.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { 
+      e.preventDefault(); 
+      tryLoginAdmin(); 
+    }
+  });
+
+  // Query param ?admin=1 o ?client=1
   (function autoOpenFromQuery() {
-    try {
-      const qp = new URLSearchParams(location.search);
-      if (qp.get('admin') === '1') showAdminForm();
-      if (qp.get('client') === '1') showClientForm();
-    } catch(e){ /* ignore */ }
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('admin') === '1') showAdminForm();
+    if (query.get('client') === '1') showClientForm();
   })();
 </script>
 
