@@ -188,41 +188,46 @@
 <!-- SERVICE WORKER -->
 <script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-      .then(async (reg) => {
-        console.log("Service Worker registrado:", reg.scope);
+    navigator.serviceWorker.register('sw.js').then(async (reg) => {
+      console.log("Service Worker registrado:", reg.scope);
 
-        if (reg.sync) {
-          try {
-            await reg.sync.register('sync-products');
-          } catch (err) {
-            console.warn('No se pudo registrar Background Sync', err);
-          }
+      // Background Sync seguro
+      if (reg.sync) {
+        try {
+          await reg.sync.register('sync-products');
+        } catch (err) {
+          console.warn('No se pudo registrar Background Sync', err);
         }
+      }
 
-        function requestQueueProcess() {
-          if (navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'PROCESS_QUEUE' });
-          }
-        }
-
+      // Función para solicitar procesamiento de cola
+      function requestQueueProcess() {
         if (navigator.serviceWorker.controller) {
-          requestQueueProcess();
-        } else {
-          navigator.serviceWorker.addEventListener('controllerchange', requestQueueProcess);
+          navigator.serviceWorker.controller.postMessage({ type: 'PROCESS_QUEUE' });
         }
-      });
+      }
+
+      // Enviar mensaje cuando el SW esté listo
+      if (navigator.serviceWorker.controller) {
+        requestQueueProcess();
+      } else {
+        navigator.serviceWorker.addEventListener('controllerchange', requestQueueProcess);
+      }
+    }).catch(err => {
+      console.error("Error registrando SW:", err);
+    });
   }
 
+  // BOTÓN MANUAL: Procesar cola
   function sendProcessQueueMessage() {
     if (!navigator.serviceWorker) {
-      alert('El navegador no soporta Service Worker');
+      alert('Este navegador no soporta Service Worker');
       return;
     }
 
     if (navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: 'PROCESS_QUEUE' });
-      alert('Solicitando procesamiento de imágenes pendientes…');
+      alert('Procesando imágenes pendientes…');
       return;
     }
 
