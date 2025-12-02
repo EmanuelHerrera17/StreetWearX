@@ -1,135 +1,193 @@
-// sw.js — StreetWearX (VERSIÓN FINAL OPTIMIZADA)
-const CACHE_NAME = 'streetwearx-v7';
-
-// Archivos estáticos a cachear obligatoriamente
-const STATIC_ASSETS = [
-  './',
-  './index.html',
-  './tienda.html',
-  './admin.html',
-  './admin.js',
-  './manifest.webmanifest',
-  './LogoStreetWearX.jpg',
-  './videoStreetWearX.mp4'
+// ...existing code...
+const CACHE_NAME = 'sw-cache-v1';
+const PRECACHE_URLS = [
+  '/', 
+  '/index.html',
+  '/offline.html',
+  '/LogoStreetWearX.jpg',
+  '/admin.js',
+  '/styles.css'
 ];
 
-/* ---------------------------------------------------------
-   INSTALL — Guarda en caché los assets estáticos
---------------------------------------------------------- */
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
-      .catch(err => console.error("Error al guardar assets:", err))
-  );
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {}))
+  );
 });
 
-/* ---------------------------------------------------------
-   ACTIVATE — Limpia cachés antiguas
---------------------------------------------------------- */
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys.filter(key => key !== CACHE_NAME)
-            .map(key => caches.delete(key))
-      )
-    )
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())));
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
 
-/* ---------------------------------------------------------
-   FETCH — Estrategia híbrida avanzada
---------------------------------------------------------- */
+/**
+ * Fetch handler — safe cloning of responses to avoid "body already used" errors.
+ */
 self.addEventListener('fetch', (event) => {
   const req = event.request;
 
-  // Evitar manejar métodos que no sean GET
+  // Only handle GET requests for caching; pass-through others
   if (req.method !== 'GET') return;
 
-  /* ----- HTML (Navegación) ----- */
-  if (req.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(
-      fetch(req)
-        .then(res => {
-          // Guardar copia en cache
-          caches.open(CACHE_NAME).then(cache => cache.put(req, res.clone()));
-          return res;
-        })
-        .catch(() => {
-          // Fallback según la página
-          if (req.url.includes('tienda')) return caches.match('./tienda.html');
-          if (req.url.includes('admin')) return caches.match('./admin.html');
-          return caches.match('./index.html');
-        })
-    );
-    return;
-  }
-
-  /* ----- Recursos estáticos (JS/CSS/img) ----- */
   event.respondWith(
-    caches.match(req).then(cacheRes => {
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
 
-      // Si está en caché → úsalo
-      if (cacheRes) return cacheRes;
+      return fetch(req).then((networkRes) => {
+        // Clone immediately for cache — do not consume networkRes before cloning
+        const resForCache = networkRes.clone();
+        const resForReturn = networkRes;
 
-      // Si no, buscar en red
-      return fetch(req)
-        .then(networkRes => {
-          // Si la respuesta no sirve, regresarla como está
-          if (!networkRes || networkRes.status !== 200) return networkRes;
+        // Cache asynchronously and safely
+        event.waitUntil(
+          caches.open(CACHE_NAME).then((cache) => {
+            // ignore opaque responses that can't be cached in some browsers
+            try {
+              return cache.put(req, resForCache);
+            } catch (e) {
+              return Promise.resolve();
+            }
+          })
+        );
 
-          // Detectar si es imagen para cachearla
-          const isImage =
-            req.destination === 'image' ||
-            /\.(png|jpg|jpeg|webp|gif|svg)$/i.test(req.url) ||
-            req.url.includes('cloudinary');
-
-          if (isImage) {
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(req, networkRes.clone());
-            });
-          }
-
-          return networkRes;
-        })
-        .catch(() => {
-          // Sin conexión → retornar lo que haya en cache si existe
-          return cacheRes || new Response("Offline", { status: 200 });
-        });
+        return resForReturn;
+      }).catch(() => {
+        // Fallback to offline page for navigations, or cached resource otherwise
+        if (req.mode === 'navigate') {
+          return caches.match('/offline.html');
+        }
+        return caches.match(req) || caches.match('/offline.html');
+      });
     })
   );
 });
 
-/* ---------------------------------------------------------
-   Background Sync (sincronización diferida)
---------------------------------------------------------- */
+/**
+ * Background sync: when 'sync-products' fires, notify all clients to process queue.
+ */
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-products') {
-    event.waitUntil(processQueue());
+    event.waitUntil(
+      self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+        .then((clients) => {
+          clients.forEach(c => c.postMessage({ type: 'PROCESS_QUEUE' }));
+        })
+    );
   }
 });
 
-/* ---------------------------------------------------------
-   Mensajes desde las páginas
---------------------------------------------------------- */
+/**
+ * Message handler: support direct messages from pages to trigger queue processing.
+ */
 self.addEventListener('message', (event) => {
-  if (event.data?.type === "PROCESS_QUEUE") {
-    processQueue();
+  const data = event.data || {};
+  if (data && data.type === 'PROCESS_QUEUE') {
+    // forward to all clients (page will actually run the queue processing logic)
+    self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+      .then(clients => clients.forEach(c => c.postMessage({ type: 'PROCESS_QUEUE' })));
+  }
+});
+// ...existing code...
+```// filepath: c:\Users\emanu\OneDrive\Escritorio\StreetWearX\sw.js
+// ...existing code...
+const CACHE_NAME = 'sw-cache-v1';
+const PRECACHE_URLS = [
+  '/', 
+  '/index.html',
+  '/offline.html',
+  '/LogoStreetWearX.jpg',
+  '/admin.js',
+  '/styles.css'
+];
+
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {}))
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => (k !== CACHE_NAME ? caches.delete(k) : Promise.resolve())));
+      await self.clients.claim();
+    })()
+  );
+});
+
+/**
+ * Fetch handler — safe cloning of responses to avoid "body already used" errors.
+ */
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+
+  // Only handle GET requests for caching; pass-through others
+  if (req.method !== 'GET') return;
+
+  event.respondWith(
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+
+      return fetch(req).then((networkRes) => {
+        // Clone immediately for cache — do not consume networkRes before cloning
+        const resForCache = networkRes.clone();
+        const resForReturn = networkRes;
+
+        // Cache asynchronously and safely
+        event.waitUntil(
+          caches.open(CACHE_NAME).then((cache) => {
+            // ignore opaque responses that can't be cached in some browsers
+            try {
+              return cache.put(req, resForCache);
+            } catch (e) {
+              return Promise.resolve();
+            }
+          })
+        );
+
+        return resForReturn;
+      }).catch(() => {
+        // Fallback to offline page for navigations, or cached resource otherwise
+        if (req.mode === 'navigate') {
+          return caches.match('/offline.html');
+        }
+        return caches.match(req) || caches.match('/offline.html');
+      });
+    })
+  );
+});
+
+/**
+ * Background sync: when 'sync-products' fires, notify all clients to process queue.
+ */
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-products') {
+    event.waitUntil(
+      self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+        .then((clients) => {
+          clients.forEach(c => c.postMessage({ type: 'PROCESS_QUEUE' }));
+        })
+    );
   }
 });
 
-/* ---------------------------------------------------------
-   Función usada por el Sync y mensajes
---------------------------------------------------------- */
-async function processQueue() {
-  const clientsList = await self.clients.matchAll({
-    includeUncontrolled: true
-  });
-
-  clientsList.forEach(client => {
-    client.postMessage({ type: "PROCESS_QUEUE" });
-  });
-}
+/**
+ * Message handler: support direct messages from pages to trigger queue processing.
+ */
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (data && data.type === 'PROCESS_QUEUE') {
+    // forward to all clients (page will actually run the queue processing logic)
+    self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+      .then(clients => clients.forEach(c => c.postMessage({ type: 'PROCESS_QUEUE' })));
+  }
+});
+// ...existing code...
