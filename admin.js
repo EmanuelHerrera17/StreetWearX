@@ -68,16 +68,24 @@ const productsContainer = document.getElementById("productsContainer");
 /* ---------------------------
    CLOUDINARY CONFIG
 --------------------------- */
-const CLOUD_NAME = "dexxdi5fs"; // ⚠️ VERIFICA ESTE VALOR EN DASHBOARD
-const UPLOAD_PRESET = "streetwearx_unsigned"; // ⚠️ CREA ESTE PRESET SI NO EXISTE
+// ...existing code...
+const CLOUD_NAME = "dv5pdjhso";
+const UPLOAD_PRESET = "pwa_unsigned";
 const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
 
-console.log("🔧 Cloudinary Config:", { CLOUD_NAME, UPLOAD_PRESET, CLOUDINARY_URL });
-
-function isCloudinaryConfigured() {
-  return Boolean(CLOUD_NAME && UPLOAD_PRESET && CLOUDINARY_URL);
+// Validación sencilla y log claro
+function validateCloudinaryConfig() {
+  const ok = typeof CLOUD_NAME === 'string' && CLOUD_NAME.trim() &&
+             typeof UPLOAD_PRESET === 'string' && UPLOAD_PRESET.trim();
+  return { ok, CLOUD_NAME: CLOUD_NAME || null, UPLOAD_PRESET: UPLOAD_PRESET || null, CLOUDINARY_URL };
 }
 
+const cloudCfg = validateCloudinaryConfig();
+if (!cloudCfg.ok) {
+  console.error("Cloudinary NO configurado. Verifica CLOUD_NAME y UPLOAD_PRESET en admin.js.", cloudCfg);
+} else {
+  console.info("🔧 Cloudinary Config:", cloudCfg);
+}
 /* =====================================================
    UTIL: comprimirImagen(file) -> File (JPEG)
 ===================================================== */
@@ -603,3 +611,4 @@ function escapeHtml(unsafe) {
    - I intentionally avoid embedding Cloudinary API_SECRET in the client.
 ===================================================== */
 // ...existing code...
+
