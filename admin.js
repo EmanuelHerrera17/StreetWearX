@@ -1,6 +1,5 @@
-// ...existing code...
 /*****************************************
- *   ADMIN PANEL – StreetWearX (FINAL - CORREGIDO)
+ *   ADMIN PANEL – StreetWearX
  *   Cloudinary + Firestore + Offline Queue
  *   + Compresión de imágenes
  *   + Borrado de productos (Firestore) + hook para borrar en Cloudinary via backend
@@ -44,6 +43,7 @@ const productosRef = collection(db, "productos");
    HABILITAR OFFLINE Firestore
 --------------------------- */
 enableIndexedDbPersistence(db).catch((err) => {
+  // Esto suele fallar si tienes otra pestaña abierta con la misma app
   console.warn("IndexedDB persistence unavailable (OK if another tab has it):", err);
 });
 
@@ -68,24 +68,13 @@ const productsContainer = document.getElementById("productsContainer");
 /* ---------------------------
    CLOUDINARY CONFIG
 --------------------------- */
-// ...existing code...
-const CLOUD_NAME = "dv5pdjhso";
-const UPLOAD_PRESET = "streetwearx_unsigned";
-const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+const CLOUD_NAME = "dexxdi5fs"; // ⚠️ VERIFICA ESTE VALOR EN TU DASHBOARD
+const UPLOAD_PRESET = "streetwearx_unsigned"; // ⚠️ CREA ESTE PRESET SI NO EXISTE
+// Ruta recomendada por Cloudinary: /upload (image es el resource_type por defecto)
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/upload`;
 
-// Validación sencilla y log claro
-function validateCloudinaryConfig() {
-  const ok = typeof CLOUD_NAME === 'string' && CLOUD_NAME.trim() &&
-             typeof UPLOAD_PRESET === 'string' && UPLOAD_PRESET.trim();
-  return { ok, CLOUD_NAME: CLOUD_NAME || null, UPLOAD_PRESET: UPLOAD_PRESET || null, CLOUDINARY_URL };
-}
+console.log("🔧 Cloudinary Config:", { CLOUD_NAME, UPLOAD_PRESET, CLOUDINARY_URL });
 
-const cloudCfg = validateCloudinaryConfig();
-if (!cloudCfg.ok) {
-  console.error("Cloudinary NO configurado. Verifica CLOUD_NAME y UPLOAD_PRESET en admin.js.", cloudCfg);
-} else {
-  console.info("🔧 Cloudinary Config:", cloudCfg);
-}
 /* =====================================================
    UTIL: comprimirImagen(file) -> File (JPEG)
 ===================================================== */
@@ -111,9 +100,15 @@ async function comprimirImagen(file, maxWidth = 1080, quality = 0.75) {
         canvas.toBlob(
           (blob) => {
             URL.revokeObjectURL(objectUrl);
-            if (!blob) return reject(new Error("No se pudo crear blob al comprimir"));
-            const baseName = file.name ? file.name.replace(/\.[^/.]+$/, "") : `${Date.now()}`;
-            const newFile = new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+            if (!blob) {
+              return reject(new Error("No se pudo crear blob al comprimir"));
+            }
+            const baseName = file.name
+              ? file.name.replace(/\.[^/.]+$/, "")
+              : `${Date.now()}`;
+            const newFile = new File([blob], `${baseName}.jpg`, {
+              type: "image/jpeg"
+            });
             resolve(newFile);
           },
           "image/jpeg",
@@ -136,28 +131,19 @@ async function comprimirImagen(file, maxWidth = 1080, quality = 0.75) {
 
 /* =====================================================
    UTIL: subirACloudinary(file) -> { url, public_id }
-   Mejor manejo de errores para detectar 'upload preset not found'
 ===================================================== */
 async function subirACloudinary(file) {
-  if (!isCloudinaryConfigured()) {
-    throw new Error("Cloudinary no está configurado correctamente (CLOUD_NAME o UPLOAD_PRESET faltante).");
-  }
-
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", UPLOAD_PRESET);
 
   const res = await fetch(CLOUDINARY_URL, {
     method: "POST",
-    body: formData,
+    body: formData
   });
 
   if (!res.ok) {
     const bodyText = await res.text().catch(() => "");
-    // Detectar mensaje específico de Cloudinary y devolver error claro
-    if (res.status === 400 && /upload preset not found/i.test(bodyText)) {
-      throw new Error("Upload preset not found: crea el preset 'streetwearx_unsigned' en Cloudinary (unsigned).");
-    }
     throw new Error(`Cloudinary upload failed: ${res.status} ${bodyText}`);
   }
 
@@ -173,6 +159,12 @@ async function subirACloudinary(file) {
 ===================================================== */
 function openIDB() {
   return new Promise((resolve, reject) => {
+    if (!("indexedDB" in window)) {
+      console.warn("IndexedDB no soportado en este navegador.");
+      resolve(null);
+      return;
+    }
+
     const req = indexedDB.open("sw-queue", 2);
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
@@ -187,6 +179,7 @@ function openIDB() {
 
 async function addToQueue(item) {
   const dbInst = await openIDB();
+  if (!dbInst) return;
   return new Promise((resolve, reject) => {
     const tx = dbInst.transaction("uploads", "readwrite");
     const req = tx.objectStore("uploads").add(item);
@@ -197,14 +190,18 @@ async function addToQueue(item) {
 
 async function getQueueItems() {
   const dbInst = await openIDB();
+  if (!dbInst) return [];
   return new Promise((resolve) => {
     const tx = dbInst.transaction("uploads", "readonly");
-    tx.objectStore("uploads").getAll().onsuccess = (e) => resolve(e.target.result || []);
+    const req = tx.objectStore("uploads").getAll();
+    req.onsuccess = (e) => resolve(e.target.result || []);
+    req.onerror = () => resolve([]);
   });
 }
 
 async function deleteQueueItem(id) {
   const dbInst = await openIDB();
+  if (!dbInst) return;
   return new Promise((resolve, reject) => {
     const tx = dbInst.transaction("uploads", "readwrite");
     const req = tx.objectStore("uploads").delete(id);
@@ -221,15 +218,18 @@ async function processQueue() {
   if (processingQueue) return;
   processingQueue = true;
   console.log("[SW-QUEUE] Procesando cola offline...");
+
   try {
     const items = await getQueueItems();
-    if (!items.length) {
+    if (!items || !items.length) {
       console.log("[SW-QUEUE] Cola vacía");
       return;
     }
 
     for (const item of items) {
-      if (item.type !== "uploadImages") continue;
+      if (!item || item.type !== "uploadImages" || !Array.isArray(item.files)) {
+        continue;
+      }
 
       try {
         const urls = [];
@@ -237,22 +237,31 @@ async function processQueue() {
 
         for (const f of item.files) {
           // reconstruct File from ArrayBuffer
-          const fileObj = new File([f.buffer], f.name, { type: f.type || "application/octet-stream" });
+          const buffer = f.buffer instanceof ArrayBuffer ? f.buffer : null;
+          if (!buffer) continue;
+
+          const fileObj = new File([buffer], f.name, {
+            type: f.type || "application/octet-stream"
+          });
 
           // compress
           const comprimida = await comprimirImagen(fileObj);
 
           // upload
           const res = await subirACloudinary(comprimida);
-          urls.push(res.url);
-          if (res.public_id) public_ids.push(res.public_id);
+          if (res?.url) {
+            urls.push(res.url);
+          }
+          if (res?.public_id) {
+            public_ids.push(res.public_id);
+          }
         }
 
         // update Firestore doc
         await updateDoc(doc(db, "productos", item.docId), {
           imagen: urls[0] || "",
           imagenes: urls,
-          public_ids: public_ids,
+          public_ids,
           pendingImages: false
         });
 
@@ -261,7 +270,7 @@ async function processQueue() {
         console.log(`[SW-QUEUE] Item procesado y eliminado id=${item.id}`);
       } catch (err) {
         console.error(`[SW-QUEUE] Error procesando item id=${item.id}`, err);
-        // mantener item para reintento futuro
+        // si falla, mantener item para reintento futuro
       }
     }
   } finally {
@@ -273,7 +282,7 @@ async function processQueue() {
    Ejecutar cola cuando volvemos online (global)
 -------------------------------------------------------- */
 window.addEventListener("online", () => {
-  processQueue().catch(e => console.error(e));
+  processQueue().catch((e) => console.error(e));
 });
 
 /* =====================================================
@@ -283,10 +292,14 @@ const currentlyObjectURLs = new Set();
 
 function clearPreviewAndRevoke() {
   if (!preview) return;
-  preview.querySelectorAll("img").forEach(img => {
+  preview.querySelectorAll("img").forEach((img) => {
     const src = img.getAttribute("data-blob-url");
     if (src) {
-      try { URL.revokeObjectURL(src); } catch (e) { /* ignore */ }
+      try {
+        URL.revokeObjectURL(src);
+      } catch (e) {
+        // ignore
+      }
       currentlyObjectURLs.delete(src);
     }
   });
@@ -315,7 +328,6 @@ if (inputImagenes) {
 
 /* =====================================================
    GUARDAR PRODUCTO (con soporte offline queue)
-   Manejo robusto: si falla subida a Cloudinary, se coloca en cola
 ===================================================== */
 if (productoForm) {
   productoForm.addEventListener("submit", async (e) => {
@@ -326,7 +338,8 @@ if (productoForm) {
     try {
       const nombre = nombreProducto?.value.trim();
       if (!nombre) throw new Error("Nombre requerido");
-      const clave = claveProducto?.value.trim();
+
+      const clave = claveProducto?.value.trim() || "";
       const categoria = categoriaEl?.value || "";
       const subcategoria = subcategoriaEl?.value || "";
       const precio = parseFloat(precioProducto?.value) || 0;
@@ -356,48 +369,27 @@ if (productoForm) {
         await updateDoc(doc(db, "productos", ref.id), { pendingImages: false });
         alert("Producto guardado (sin imágenes).");
       } else {
-        // Attempt online upload; if it fails, fallback to queuing
         if (navigator.onLine) {
-          try {
-            // upload sequentially (avoid throttling)
-            const results = [];
-            for (const f of inputImagenes.files) {
-              const comp = await comprimirImagen(f);
-              results.push(await subirACloudinary(comp));
-            }
-
-            const urls = results.map(r => r.url || r);
-            const public_ids = results.map(r => r.public_id).filter(Boolean);
-
-            await updateDoc(doc(db, "productos", ref.id), {
-              imagen: urls[0] || "",
-              imagenes: urls,
-              public_ids,
-              pendingImages: false
-            });
-
-            alert("Producto guardado con imágenes.");
-          } catch (err) {
-            console.error("Subida a Cloudinary falló:", err);
-            // Fallback: add to queue so images will be retried later
-            const filesArr = await Promise.all(
-              Array.from(inputImagenes.files).map(async (f) => ({
-                name: f.name,
-                type: f.type,
-                buffer: await f.arrayBuffer()
-              }))
-            );
-
-            await addToQueue({
-              type: "uploadImages",
-              docId: ref.id,
-              files: filesArr,
-              createdAt: Date.now()
-            });
-
-            await updateDoc(doc(db, "productos", ref.id), { pendingImages: true });
-            alert("No se pudieron subir las imágenes ahora. Se han puesto en cola para subirlas más tarde. Error: " + (err.message || err));
+          // upload sequentially (avoid throttling)
+          const results = [];
+          for (const f of inputImagenes.files) {
+            const comp = await comprimirImagen(f);
+            results.push(await subirACloudinary(comp));
           }
+
+          const urls = results.map((r) => r.url).filter(Boolean);
+          const public_ids = results
+            .map((r) => r.public_id)
+            .filter(Boolean);
+
+          await updateDoc(doc(db, "productos", ref.id), {
+            imagen: urls[0] || "",
+            imagenes: urls,
+            public_ids,
+            pendingImages: false
+          });
+
+          alert("Producto guardado con imágenes.");
         } else {
           // offline -> store arrayBuffers in IDB queue
           const filesArr = await Promise.all(
@@ -416,13 +408,19 @@ if (productoForm) {
           });
 
           // try to register background sync and notify SW
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.ready.then(reg => {
-              if (reg.sync) reg.sync.register('sync-products').catch(()=>{});
-              if (navigator.serviceWorker.controller) {
-                navigator.serviceWorker.controller.postMessage({ type: "PROCESS_QUEUE" });
-              }
-            }).catch(()=>{});
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.ready
+              .then((reg) => {
+                if (reg.sync) {
+                  reg.sync.register("sync-products").catch(() => {});
+                }
+                if (navigator.serviceWorker.controller) {
+                  navigator.serviceWorker.controller.postMessage({
+                    type: "PROCESS_QUEUE"
+                  });
+                }
+              })
+              .catch(() => {});
           }
 
           alert("Guardado offline. Las imágenes se subirán cuando haya conexión.");
@@ -458,14 +456,13 @@ function createProductCardElement(p, id) {
   const img = document.createElement("img");
   img.className = "thumb mb-2";
   img.alt = p.nombre || "";
-  // Only set src if non-empty string to avoid invalid urls
+
   if (p.imagen) {
     img.src = p.imagen;
   } else if (Array.isArray(p.imagenes) && p.imagenes.length) {
     img.src = p.imagenes[0];
   } else {
-    // optional placeholder
-    img.src = "LogoStreetWearX.jpg";
+    img.src = "LogoStreetWearX.jpg"; // placeholder
   }
 
   const h5 = document.createElement("h5");
@@ -475,10 +472,14 @@ function createProductCardElement(p, id) {
   claveP.innerHTML = `<strong>Clave:</strong> ${escapeHtml(p.clave || "")}`;
 
   const catP = document.createElement("p");
-  catP.innerHTML = `<strong>Categoría:</strong> ${escapeHtml(p.categoria || "")} / ${escapeHtml(p.subcategoria || "")}`;
+  catP.innerHTML = `<strong>Categoría:</strong> ${escapeHtml(
+    p.categoria || ""
+  )} / ${escapeHtml(p.subcategoria || "")}`;
 
   const precioP = document.createElement("p");
-  precioP.innerHTML = `<strong>Precio:</strong> $${Number(p.precio || 0).toFixed(2)}`;
+  precioP.innerHTML = `<strong>Precio:</strong> $${Number(
+    p.precio || 0
+  ).toFixed(2)}`;
 
   const stockP = document.createElement("p");
   stockP.innerHTML = `<strong>Stock:</strong> ${Number(p.stock || 0)}`;
@@ -501,7 +502,6 @@ function createProductCardElement(p, id) {
 
   actions.appendChild(btnDelete);
 
-  // assemble
   card.appendChild(img);
   card.appendChild(h5);
   card.appendChild(claveP);
@@ -530,20 +530,38 @@ function renderProductsList(snapshot) {
 // Event delegation for delete buttons
 if (productsContainer) {
   productsContainer.addEventListener("click", async (ev) => {
-    const btn = ev.target.closest && ev.target.closest(".btn-delete");
+    const btn =
+      typeof ev.target.closest === "function"
+        ? ev.target.closest(".btn-delete")
+        : null;
     if (!btn) return;
+
     const id = btn.getAttribute("data-id");
     if (!id) return;
 
-    if (!confirm("¿Confirmas eliminar este producto? Esta acción es irreversible.")) return;
+    if (
+      !confirm(
+        "¿Confirmas eliminar este producto? Esta acción es irreversible."
+      )
+    )
+      return;
 
     try {
       const docRef = doc(db, "productos", id);
       const snap = await getDoc(docRef);
-      const publicIds = snap.exists() ? (snap.data().public_ids || []) : [];
+      const publicIds = snap.exists() ? snap.data().public_ids || [] : [];
 
       await deleteDoc(doc(db, "productos", id));
       alert("Producto eliminado.");
+
+      // Si tienes backend seguro para borrar en Cloudinary:
+      // if (publicIds.length) {
+      //   await fetch('/api/delete-cloudinary-images', {
+      //     method: 'POST',
+      //     headers: { 'Content-Type': 'application/json' },
+      //     body: JSON.stringify({ public_ids: publicIds })
+      //   });
+      // }
     } catch (err) {
       console.error("Error borrando producto:", err);
       alert("No se pudo eliminar el producto.");
@@ -552,11 +570,17 @@ if (productsContainer) {
 }
 
 function cargarProductos() {
-  onSnapshot(productosRef, (snap) => renderProductsList(snap), (err) => {
-    console.error("onSnapshot error:", err);
-    // fallback: one-time load
-    getDocs(productosRef).then(snap => renderProductsList(snap)).catch(e => console.error(e));
-  });
+  onSnapshot(
+    productosRef,
+    (snap) => renderProductsList(snap),
+    (err) => {
+      console.error("onSnapshot error:", err);
+      // fallback: one-time load
+      getDocs(productosRef)
+        .then((snap) => renderProductsList(snap))
+        .catch((e) => console.error(e));
+    }
+  );
 }
 
 cargarProductos();
@@ -564,11 +588,11 @@ cargarProductos();
 /* =====================================================
    SERVICE WORKER messages
 ===================================================== */
-if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
+if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (ev) => {
     if (ev.data?.type === "PROCESS_QUEUE") {
       if (navigator.onLine) {
-        processQueue().catch(e => console.error(e));
+        processQueue().catch((e) => console.error(e));
       } else {
         console.log("SW requested queue processing but client is offline.");
       }
@@ -604,12 +628,6 @@ function escapeHtml(unsafe) {
 
 /* =====================================================
    NOTES:
-   - To securely delete Cloudinary-stored images implement a server endpoint
-     (Cloud Function / small Node API) that receives public_ids and calls the
-     Cloudinary Admin API (requires API_KEY + API_SECRET).
-   - public_ids are stored in each product doc so server-side deletion is possible.
-   - I intentionally avoid embedding Cloudinary API_SECRET in the client.
+   - Para borrar imágenes en Cloudinary de forma segura, hazlo desde un backend
+     (Cloud Function / pequeño API en Node) usando los public_ids.
 ===================================================== */
-// ...existing code...
-
-
