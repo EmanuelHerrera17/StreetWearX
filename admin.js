@@ -1,3 +1,4 @@
+// ...existing code...
 /*****************************************
  *   ADMIN PANEL – StreetWearX (FINAL - CORREGIDO)
  *   Cloudinary + Firestore + Offline Queue
@@ -67,12 +68,15 @@ const productsContainer = document.getElementById("productsContainer");
 /* ---------------------------
    CLOUDINARY CONFIG
 --------------------------- */
-Cloudinary Config: { 
-  CLOUD_NAME: "dexxdi5fs", 
-  UPLOAD_PRESET: "streetwearx_unsigned", 
-  CLOUDINARY_URL: "https://api.cloudinary.com/v1_1/dexxdi5fs/image/upload" 
-}
+const CLOUD_NAME = "dexxdi5fs"; // ⚠️ VERIFICA ESTE VALOR EN DASHBOARD
+const UPLOAD_PRESET = "streetwearx_unsigned"; // ⚠️ CREA ESTE PRESET SI NO EXISTE
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+
 console.log("🔧 Cloudinary Config:", { CLOUD_NAME, UPLOAD_PRESET, CLOUDINARY_URL });
+
+function isCloudinaryConfigured() {
+  return Boolean(CLOUD_NAME && UPLOAD_PRESET && CLOUDINARY_URL);
+}
 
 /* =====================================================
    UTIL: comprimirImagen(file) -> File (JPEG)
@@ -124,8 +128,13 @@ async function comprimirImagen(file, maxWidth = 1080, quality = 0.75) {
 
 /* =====================================================
    UTIL: subirACloudinary(file) -> { url, public_id }
+   Mejor manejo de errores para detectar 'upload preset not found'
 ===================================================== */
 async function subirACloudinary(file) {
+  if (!isCloudinaryConfigured()) {
+    throw new Error("Cloudinary no está configurado correctamente (CLOUD_NAME o UPLOAD_PRESET faltante).");
+  }
+
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", UPLOAD_PRESET);
@@ -137,6 +146,10 @@ async function subirACloudinary(file) {
 
   if (!res.ok) {
     const bodyText = await res.text().catch(() => "");
+    // Detectar mensaje específico de Cloudinary y devolver error claro
+    if (res.status === 400 && /upload preset not found/i.test(bodyText)) {
+      throw new Error("Upload preset not found: crea el preset 'streetwearx_unsigned' en Cloudinary (unsigned).");
+    }
     throw new Error(`Cloudinary upload failed: ${res.status} ${bodyText}`);
   }
 
@@ -240,7 +253,7 @@ async function processQueue() {
         console.log(`[SW-QUEUE] Item procesado y eliminado id=${item.id}`);
       } catch (err) {
         console.error(`[SW-QUEUE] Error procesando item id=${item.id}`, err);
-        // si falla, mantener item para reintento futuro
+        // mantener item para reintento futuro
       }
     }
   } finally {
@@ -294,6 +307,7 @@ if (inputImagenes) {
 
 /* =====================================================
    GUARDAR PRODUCTO (con soporte offline queue)
+   Manejo robusto: si falla subida a Cloudinary, se coloca en cola
 ===================================================== */
 if (productoForm) {
   productoForm.addEventListener("submit", async (e) => {
@@ -334,25 +348,48 @@ if (productoForm) {
         await updateDoc(doc(db, "productos", ref.id), { pendingImages: false });
         alert("Producto guardado (sin imágenes).");
       } else {
+        // Attempt online upload; if it fails, fallback to queuing
         if (navigator.onLine) {
-          // upload sequentially (avoid throttling)
-          const results = [];
-          for (const f of inputImagenes.files) {
-            const comp = await comprimirImagen(f);
-            results.push(await subirACloudinary(comp));
+          try {
+            // upload sequentially (avoid throttling)
+            const results = [];
+            for (const f of inputImagenes.files) {
+              const comp = await comprimirImagen(f);
+              results.push(await subirACloudinary(comp));
+            }
+
+            const urls = results.map(r => r.url || r);
+            const public_ids = results.map(r => r.public_id).filter(Boolean);
+
+            await updateDoc(doc(db, "productos", ref.id), {
+              imagen: urls[0] || "",
+              imagenes: urls,
+              public_ids,
+              pendingImages: false
+            });
+
+            alert("Producto guardado con imágenes.");
+          } catch (err) {
+            console.error("Subida a Cloudinary falló:", err);
+            // Fallback: add to queue so images will be retried later
+            const filesArr = await Promise.all(
+              Array.from(inputImagenes.files).map(async (f) => ({
+                name: f.name,
+                type: f.type,
+                buffer: await f.arrayBuffer()
+              }))
+            );
+
+            await addToQueue({
+              type: "uploadImages",
+              docId: ref.id,
+              files: filesArr,
+              createdAt: Date.now()
+            });
+
+            await updateDoc(doc(db, "productos", ref.id), { pendingImages: true });
+            alert("No se pudieron subir las imágenes ahora. Se han puesto en cola para subirlas más tarde. Error: " + (err.message || err));
           }
-
-          const urls = results.map(r => r.url || r);
-          const public_ids = results.map(r => r.public_id).filter(Boolean);
-
-          await updateDoc(doc(db, "productos", ref.id), {
-            imagen: urls[0] || "",
-            imagenes: urls,
-            public_ids,
-            pendingImages: false
-          });
-
-          alert("Producto guardado con imágenes.");
         } else {
           // offline -> store arrayBuffers in IDB queue
           const filesArr = await Promise.all(
@@ -371,13 +408,13 @@ if (productoForm) {
           });
 
           // try to register background sync and notify SW
-          if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+          if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready.then(reg => {
               if (reg.sync) reg.sync.register('sync-products').catch(()=>{});
               if (navigator.serviceWorker.controller) {
                 navigator.serviceWorker.controller.postMessage({ type: "PROCESS_QUEUE" });
               }
-            });
+            }).catch(()=>{});
           }
 
           alert("Guardado offline. Las imágenes se subirán cuando haya conexión.");
@@ -499,15 +536,6 @@ if (productsContainer) {
 
       await deleteDoc(doc(db, "productos", id));
       alert("Producto eliminado.");
-
-      // If you have secure backend to delete Cloudinary images:
-      // if (publicIds.length) {
-      //   await fetch('/api/delete-cloudinary-images', {
-      //     method: 'POST',
-      //     headers: { 'Content-Type': 'application/json' },
-      //     body: JSON.stringify({ public_ids: publicIds })
-      //   });
-      // }
     } catch (err) {
       console.error("Error borrando producto:", err);
       alert("No se pudo eliminar el producto.");
@@ -528,15 +556,17 @@ cargarProductos();
 /* =====================================================
    SERVICE WORKER messages
 ===================================================== */
-navigator.serviceWorker?.addEventListener("message", (ev) => {
-  if (ev.data?.type === "PROCESS_QUEUE") {
-    if (navigator.onLine) {
-      processQueue().catch(e => console.error(e));
-    } else {
-      console.log("SW requested queue processing but client is offline.");
+if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
+  navigator.serviceWorker.addEventListener("message", (ev) => {
+    if (ev.data?.type === "PROCESS_QUEUE") {
+      if (navigator.onLine) {
+        processQueue().catch(e => console.error(e));
+      } else {
+        console.log("SW requested queue processing but client is offline.");
+      }
     }
-  }
-});
+  });
+}
 
 /* =====================================================
    Try processing queue on start if online
@@ -572,6 +602,4 @@ function escapeHtml(unsafe) {
    - public_ids are stored in each product doc so server-side deletion is possible.
    - I intentionally avoid embedding Cloudinary API_SECRET in the client.
 ===================================================== */
-
-
-
+// ...existing code...
