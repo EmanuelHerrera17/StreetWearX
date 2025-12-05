@@ -41,7 +41,7 @@ enableIndexedDbPersistence(db).catch(() => {
 --------------------------- */
 const CLOUD_NAME = "dexxdi5fs";
 const UPLOAD_PRESET = "pwa_streetwearx";
-const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/dexxdi5fs/image/upload`;
 
 console.log("Cloudinary conectado con preset:", UPLOAD_PRESET);
 
@@ -247,3 +247,4 @@ window.borrarProducto = async function (id) {
   await deleteDoc(doc(db, "productos", id));
   alert("Producto eliminado.");
 };
+
